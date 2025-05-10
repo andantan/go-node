@@ -7,8 +7,8 @@ import (
 )
 
 func TestConnect(t *testing.T) {
-	tra := NewLocalTransport("A")
-	trb := NewLocalTransport("B")
+	tra := NewLocalTransport("A").(*LocalTransport)
+	trb := NewLocalTransport("B").(*LocalTransport)
 
 	// Interconnect tra and trb
 	tra.Connect(trb)
@@ -20,8 +20,8 @@ func TestConnect(t *testing.T) {
 }
 
 func TestSendMessage(t *testing.T) {
-	tra := NewLocalTransport("A")
-	trb := NewLocalTransport("B")
+	tra := NewLocalTransport("A").(*LocalTransport)
+	trb := NewLocalTransport("B").(*LocalTransport)
 
 	tra.Connect(trb)
 	trb.Connect(tra)

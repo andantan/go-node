@@ -2,6 +2,7 @@ package network
 
 type NetAddr string
 
+// MESSAGE TYPE
 type RPC struct {
 	// Message sent to transport layers
 	// String or []bytes ?
