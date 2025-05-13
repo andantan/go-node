@@ -3,6 +3,7 @@ package core
 import "io"
 
 // On-chain data with this module
+// TODO: Need signature
 type Transaction struct {
 	Data []byte // This can be any arbitrary data (Will be a VOTE DATA)
 }
