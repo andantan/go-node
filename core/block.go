@@ -51,6 +51,7 @@ func (b *Block) Sign(privKey crypto.PrivateKey) error {
 	return nil
 }
 
+// Verify Signature
 func (b *Block) Verify() error {
 	if b.Signature == nil {
 		return fmt.Errorf("block has no signature")
