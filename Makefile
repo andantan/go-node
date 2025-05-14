@@ -4,5 +4,8 @@ build:
 run: build
 	./bin/node/node
 
-test:
+test-debug:
 	@go test -v ./...
+
+test:
+	@go test ./...

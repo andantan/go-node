@@ -1,17 +1,41 @@
 package core
 
-import "io"
+import (
+	"fmt"
+
+	"github.com/andantan/go-node/crypto"
+)
 
 // On-chain data with this module
 // TODO: Need signature
 type Transaction struct {
 	Data []byte // This can be any arbitrary data (Will be a VOTE DATA)
+
+	PublicKey crypto.PublicKey
+	Signature *crypto.Signature
 }
 
-func (tx *Transaction) EncodeBinary(w io.Writer) error {
+func (tx *Transaction) Sign(privKey crypto.PrivateKey) error {
+	sig, err := privKey.Sign(tx.Data)
+
+	if err != nil {
+		return err
+	}
+
+	tx.PublicKey = privKey.PublicKey()
+	tx.Signature = sig
+
 	return nil
 }
 
-func (tx *Transaction) DecodeBinary(r io.Reader) error {
+func (tx *Transaction) Verify() error {
+	if tx.Signature == nil {
+		return fmt.Errorf("transaction has no signature")
+	}
+
+	if !tx.Signature.Verify(tx.PublicKey, tx.Data) {
+		return fmt.Errorf("invaild transaction signature")
+	}
+
 	return nil
 }
