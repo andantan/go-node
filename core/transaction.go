@@ -7,11 +7,10 @@ import (
 )
 
 // On-chain data with this module
-// TODO: Need signature
 type Transaction struct {
 	Data []byte // This can be any arbitrary data (Will be a VOTE DATA)
 
-	PublicKey crypto.PublicKey
+	From      crypto.PublicKey
 	Signature *crypto.Signature
 }
 
@@ -22,7 +21,7 @@ func (tx *Transaction) Sign(privKey crypto.PrivateKey) error {
 		return err
 	}
 
-	tx.PublicKey = privKey.PublicKey()
+	tx.From = privKey.PublicKey()
 	tx.Signature = sig
 
 	return nil
@@ -33,7 +32,7 @@ func (tx *Transaction) Verify() error {
 		return fmt.Errorf("transaction has no signature")
 	}
 
-	if !tx.Signature.Verify(tx.PublicKey, tx.Data) {
+	if !tx.Signature.Verify(tx.From, tx.Data) {
 		return fmt.Errorf("invaild transaction signature")
 	}
 
