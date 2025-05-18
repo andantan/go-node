@@ -34,7 +34,13 @@ func TestSendMessage(t *testing.T) {
 	// rpc.(type) is <- chan RPC
 	rpc := <-trb.Consume()
 
+	buf := make([]byte, len(msg))
+	n, err := rpc.Payload.Read(buf)
+
+	assert.Equal(t, n, len(msg))
+	assert.Nil(t, err)
+
 	// rpc.payload will be msg
-	assert.Equal(t, rpc.Payload, msg)
+	assert.Equal(t, buf, msg)
 	assert.Equal(t, rpc.From, tra.addr)
 }

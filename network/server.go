@@ -12,6 +12,7 @@ import (
 var defaultBlockTime = 5 * time.Second
 
 type ServerOpts struct {
+	RPCHandler RPCHandler
 	// This is will be container
 	Transports []Transport
 	Blocktime  time.Duration
@@ -32,14 +33,21 @@ func NewServer(opts ServerOpts) *Server {
 		opts.Blocktime = defaultBlockTime
 	}
 
-	return &Server{
-		ServerOpts:  opts,
+	s := &Server{
 		blockTime:   opts.Blocktime,
 		memPool:     newTxPool(),
 		isValidator: opts.PrivateKey != nil,
 		rpcCh:       make(chan RPC),
 		quitCh:      make(chan struct{}),
 	}
+
+	if opts.RPCHandler == nil {
+		opts.RPCHandler = NewDefaultRPCHandler(s)
+	}
+
+	s.ServerOpts = opts
+
+	return s
 }
 
 func (s *Server) Start() {
@@ -52,7 +60,13 @@ free:
 		select {
 		case rpc := <-s.rpcCh:
 			// Is there some message from rpc channel
-			fmt.Printf("%+v\n", rpc)
+			// fmt.Printf("%+v\n", rpc)
+
+			// Somebody send wrong byte or malformed payload
+			// then just logging
+			if err := s.RPCHandler.HandlerRPC(rpc); err != nil {
+				logrus.Error(err)
+			}
 		case <-s.quitCh:
 			// break -> Break select statement NOT for loop
 			break free
@@ -66,11 +80,7 @@ free:
 	fmt.Println("Server shutdown")
 }
 
-func (s *Server) handleTransaction(tx *core.Transaction) error {
-	if err := tx.Verify(); err != nil {
-		return err
-	}
-
+func (s *Server) ProcessTransaction(from NetAddr, tx *core.Transaction) error {
 	hash := tx.Hash(core.TxHasher{})
 
 	if s.memPool.Has(hash) {
@@ -81,9 +91,18 @@ func (s *Server) handleTransaction(tx *core.Transaction) error {
 		return nil
 	}
 
+	if err := tx.Verify(); err != nil {
+		return err
+	}
+
+	tx.SetFirstSeen(time.Now().UnixNano())
+
 	logrus.WithFields(logrus.Fields{
-		"hash": hash,
+		"hash":           hash,
+		"mempool length": s.memPool.len(),
 	}).Info("adding new tx to mempool")
+
+	// TODO(@andantan): broadcast this tx to peers
 
 	return s.memPool.Add(tx)
 }
