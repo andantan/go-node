@@ -2,12 +2,12 @@ package network
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/andantan/go-node/core"
 	"github.com/andantan/go-node/crypto"
+	"github.com/andantan/go-node/types"
 	"github.com/go-kit/log"
 )
 
@@ -18,21 +18,22 @@ type ServerOpts struct {
 	Logger        log.Logger
 	RPCDecodeFunc RPCDecodeFunc
 	RPCProcessor  RPCProcessor
-	// This is will be container
-	Transports []Transport
-	Blocktime  time.Duration
-	PrivateKey *crypto.PrivateKey // If has PrivateKey, node is validator
+	Transports    []Transport // This is will be container
+	Blocktime     time.Duration
+	PrivateKey    *crypto.PrivateKey // If has PrivateKey, node is validator
+	BlockChain    *core.BlockChain
 }
 
 type Server struct {
 	ServerOpts
 	memPool     *TxPool
+	chain       *core.BlockChain
 	isValidator bool
 	rpcCh       chan RPC
 	quitCh      chan struct{}
 }
 
-func NewServer(opts ServerOpts) *Server {
+func NewServer(opts ServerOpts) (*Server, error) {
 	if opts.Blocktime == time.Duration(0) {
 		opts.Blocktime = defaultBlockTime
 	}
@@ -46,9 +47,16 @@ func NewServer(opts ServerOpts) *Server {
 		opts.Logger = log.With(opts.Logger, "ID", opts.ID)
 	}
 
+	chain, err := core.NewBlockChain(genesisBlock())
+
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Server{
 		ServerOpts:  opts,
 		memPool:     newTxPool(),
+		chain:       chain,
 		isValidator: opts.PrivateKey != nil,
 		rpcCh:       make(chan RPC),
 		quitCh:      make(chan struct{}),
@@ -66,7 +74,7 @@ func NewServer(opts ServerOpts) *Server {
 		go s.validatorLoop()
 	}
 
-	return s
+	return s, nil
 }
 
 func (s *Server) Start() {
@@ -171,11 +179,6 @@ func (s *Server) broadcastTx(tx *core.Transaction) error {
 	return s.broadcast(msg.Bytes())
 }
 
-func (s *Server) createNewBlock() error {
-	fmt.Println("creating a new block")
-	return nil
-}
-
 func (s *Server) initTransports() {
 	for _, tr := range s.Transports {
 		go func(tr Transport) {
@@ -185,4 +188,42 @@ func (s *Server) initTransports() {
 			}
 		}(tr)
 	}
+}
+
+func (s *Server) createNewBlock() error {
+	currentHeader, err := s.chain.GetHeader(s.chain.Height())
+
+	if err != nil {
+		return err
+	}
+
+	block, err := core.NewBlockFromPrevHeader(currentHeader, nil)
+
+	if err != nil {
+		return err
+	}
+
+	if err := block.Sign(*s.PrivateKey); err != nil {
+		return err
+	}
+
+	if err := s.chain.AddBlock(block); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func genesisBlock() *core.Block {
+	header := &core.Header{
+		Version:   1,
+		DataHash:  types.Hash{},
+		TimeStamp: time.Now().UnixNano(),
+		Height:    0,
+	}
+
+	// TODO(@andantan): DEMO
+	b, _ := core.NewBlock(header, nil)
+
+	return b
 }

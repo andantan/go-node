@@ -11,7 +11,7 @@ import (
 
 func TestSignBlock(t *testing.T) {
 	privKey := crypto.GeneratePrivateKey()
-	b := randomBlock(0, types.Hash{}) // Genesis
+	b := randomBlock(t, 0, types.Hash{}) // Genesis
 
 	assert.Nil(t, b.Sign(privKey))
 	assert.NotNil(t, b.Signature)
@@ -19,7 +19,7 @@ func TestSignBlock(t *testing.T) {
 
 func TestVerifyBlock(t *testing.T) {
 	privKey := crypto.GeneratePrivateKey()
-	b := randomBlock(0, types.Hash{}) // Genesis
+	b := randomBlock(t, 0, types.Hash{}) // Genesis
 
 	assert.Nil(t, b.Sign(privKey))
 	assert.Nil(t, b.Verify())
@@ -36,7 +36,9 @@ func TestVerifyBlock(t *testing.T) {
 	assert.NotNil(t, b.Verify())
 }
 
-func randomBlock(height uint32, PrevBlockHash types.Hash) *Block {
+func randomBlock(t *testing.T, height uint32, PrevBlockHash types.Hash) *Block {
+	privKey := crypto.GeneratePrivateKey()
+	tx := randomTxWithSignature(t)
 	header := &Header{
 		Version:       1,
 		PrevBlockHash: PrevBlockHash,
@@ -44,15 +46,16 @@ func randomBlock(height uint32, PrevBlockHash types.Hash) *Block {
 		TimeStamp:     time.Now().UnixNano(),
 	}
 
-	return NewBlock(header, []Transaction{})
-}
+	b, err := NewBlock(header, []Transaction{tx})
 
-func randomBlockWithSignature(t *testing.T, height uint32, prevBlockHash types.Hash) *Block {
-	privKey := crypto.GeneratePrivateKey()
-	b := randomBlock(height, prevBlockHash)
-	tx := randomTxWithSignature(t)
+	assert.Nil(t, err)
 
-	b.AddTransaction(tx)
+	dataHash, err := CalculateDataHash(b.Transactions)
+
+	assert.Nil(t, err)
+
+	b.Header.DataHash = dataHash
+
 	assert.Nil(t, b.Sign(privKey))
 
 	return b

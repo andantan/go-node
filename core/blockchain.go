@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// TODO(@andantan): Change BlockChain struct to interface
 type BlockChain struct {
 	store     Storage
 	lock      sync.RWMutex

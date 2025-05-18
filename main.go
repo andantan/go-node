@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"log"
 	"math/rand"
 	"strconv"
 	"time"
@@ -40,8 +41,8 @@ func main() {
 				logrus.Error(err)
 			}
 
-			// time.Sleep(1 * time.Second)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(1 * time.Second)
+			//time.Sleep(100 * time.Millisecond)
 		}
 	}()
 
@@ -53,7 +54,12 @@ func main() {
 		Transports: []network.Transport{trLocal},
 	}
 
-	s := network.NewServer(opts)
+	s, err := network.NewServer(opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	s.Start()
 }
 
