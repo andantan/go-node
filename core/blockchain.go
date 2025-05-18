@@ -4,19 +4,21 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/go-kit/log"
 )
 
 // TODO(@andantan): Change BlockChain struct to interface
 type BlockChain struct {
+	logger    log.Logger
 	store     Storage
 	lock      sync.RWMutex
 	headers   []*Header
 	validator Validator // Validator depends on BlockChain
 }
 
-func NewBlockChain(genesis *Block) (*BlockChain, error) {
+func NewBlockChain(l log.Logger, genesis *Block) (*BlockChain, error) {
 	bc := &BlockChain{
+		logger:  l,
 		headers: []*Header{},
 		store:   NewMemoryStore(),
 	}
@@ -69,10 +71,12 @@ func (bc *BlockChain) addBlockWithoutValidation(b *Block) error {
 	bc.headers = append(bc.headers, b.Header)
 	bc.lock.Unlock()
 
-	logrus.WithFields(logrus.Fields{
-		"height": b.Height,
-		"hash":   b.Hash(BlockHasher{}),
-	}).Info("adding new block")
+	bc.logger.Log(
+		"msg", "new block",
+		"hash", b.Hash(BlockHasher{}),
+		"height", b.Height,
+		"transactions", len(b.Transactions),
+	)
 
 	return bc.store.Put(b)
 }

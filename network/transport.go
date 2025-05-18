@@ -3,8 +3,7 @@ package network
 type NetAddr string
 
 type Transport interface {
-	// This will be module of server
-	// Access to all messages from transport layers
+	// Return Receive-only RPC channel
 	Consume() <-chan RPC
 	Connect(Transport) error
 	SendMessage(NetAddr, []byte) error

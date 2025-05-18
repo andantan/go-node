@@ -28,7 +28,7 @@ type RPC struct {
 
 type Message struct {
 	Header MessageType
-	Data   []byte
+	Data   []byte // vote data
 }
 
 func NewMessage(t MessageType, data []byte) *Message {

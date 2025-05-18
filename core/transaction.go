@@ -11,8 +11,8 @@ import (
 type Transaction struct {
 	Data []byte // This can be any arbitrary data (Will be a VOTE DATA)
 
-	From      crypto.PublicKey
-	Signature *crypto.Signature
+	From      crypto.PublicKey  // 수신자(투표자)의 공개키
+	Signature *crypto.Signature // 수신자가 개인키로 서명명
 
 	// cached version of the tx data hash
 	hash types.Hash

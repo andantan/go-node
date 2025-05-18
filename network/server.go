@@ -47,7 +47,7 @@ func NewServer(opts ServerOpts) (*Server, error) {
 		opts.Logger = log.With(opts.Logger, "ID", opts.ID)
 	}
 
-	chain, err := core.NewBlockChain(genesisBlock())
+	chain, err := core.NewBlockChain(opts.Logger, genesisBlock())
 
 	if err != nil {
 		return nil, err
@@ -193,11 +193,17 @@ func (s *Server) initTransports() {
 func (s *Server) createNewBlock() error {
 	currentHeader, err := s.chain.GetHeader(s.chain.Height())
 
+	// Using all transactions that are in the mempool later on
+	// when we know the internal structure of transwaction
+	// Will implement some kind of complexity function to determine
+	// how many transactions can be included in a block.
+	txx := s.memPool.Transactions()
+
 	if err != nil {
 		return err
 	}
 
-	block, err := core.NewBlockFromPrevHeader(currentHeader, nil)
+	block, err := core.NewBlockFromPrevHeader(currentHeader, txx)
 
 	if err != nil {
 		return err
@@ -211,6 +217,8 @@ func (s *Server) createNewBlock() error {
 		return err
 	}
 
+	s.memPool.Flush()
+
 	return nil
 }
 
@@ -218,7 +226,7 @@ func genesisBlock() *core.Block {
 	header := &core.Header{
 		Version:   1,
 		DataHash:  types.Hash{},
-		TimeStamp: time.Now().UnixNano(),
+		TimeStamp: 0,
 		Height:    0,
 	}
 

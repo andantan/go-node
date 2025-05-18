@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"math/rand"
 	"strconv"
@@ -20,38 +21,51 @@ import (
 // Keypair
 
 func main() {
-	// Running machine which is a Local note
-	// transport for own note server...?
-	// Then we have peers which our remote-peers
-	// which will represent servers in the network
-	// which are not our machine...
 	trLocal := network.NewLocalTransport("LOCAL")
-	// Instead of way of commiunate TCP/UDP
-	trRemote := network.NewLocalTransport("REMOTE") // 34.4.244.33
+	trRemoteA := network.NewLocalTransport("REMOTE_A")
+	trRemoteB := network.NewLocalTransport("REMOTE_B")
+	trRemoteC := network.NewLocalTransport("REMOTE_C")
 
-	// Local chaining -> This will be node chaining
-	// which validate TX, PBFT and commit block
-	trLocal.Connect(trRemote)
-	trRemote.Connect(trLocal)
+	// LOCAL - A - B - C - *
+	trLocal.Connect(trRemoteA)
+	trRemoteA.Connect(trRemoteB)
+	trRemoteB.Connect(trRemoteC)
+
+	trRemoteA.Connect(trLocal)
+
+	initRemoteServers([]network.Transport{trRemoteA, trRemoteB, trRemoteC})
 
 	go func() {
 		for {
 			// trRemote.SendMessage(trLocal.Addr(), []byte("Hello world"))
-			if err := sendTransaction(trRemote, trLocal.Addr()); err != nil {
+			if err := sendTransaction(trRemoteA, trLocal.Addr()); err != nil {
 				logrus.Error(err)
 			}
 
-			time.Sleep(1 * time.Second)
-			//time.Sleep(100 * time.Millisecond)
+			time.Sleep(2 * time.Second)
+			// time.Sleep(100 * time.Millisecond)
 		}
 	}()
 
 	privKey := crypto.GeneratePrivateKey()
+	localServer := makeServer("LOCAL", trLocal, &privKey)
+	localServer.Start()
+}
 
+func initRemoteServers(trs []network.Transport) {
+	for i := range len(trs) {
+		id := fmt.Sprintf("REMOTE_%d", i)
+		s := makeServer(id, trs[i], nil)
+
+		go s.Start()
+	}
+}
+
+func makeServer(id string, tr network.Transport, pk *crypto.PrivateKey) *network.Server {
 	opts := network.ServerOpts{
-		PrivateKey: &privKey,
-		ID:         "LOCAL",
-		Transports: []network.Transport{trLocal},
+		PrivateKey: pk,
+		ID:         id,
+		Transports: []network.Transport{tr},
 	}
 
 	s, err := network.NewServer(opts)
@@ -60,7 +74,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	s.Start()
+	return s
 }
 
 // Just placeholder (demo)
