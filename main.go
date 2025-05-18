@@ -40,7 +40,8 @@ func main() {
 				logrus.Error(err)
 			}
 
-			time.Sleep(1 * time.Second)
+			// time.Sleep(1 * time.Second)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}()
 

@@ -12,7 +12,8 @@ import (
 var defaultBlockTime = 5 * time.Second
 
 type ServerOpts struct {
-	RPCHandler RPCHandler
+	RPCDecodeFunc RPCDecodeFunc
+	RPCProcessor  RPCProcessor
 	// This is will be container
 	Transports []Transport
 	Blocktime  time.Duration
@@ -21,7 +22,6 @@ type ServerOpts struct {
 
 type Server struct {
 	ServerOpts
-	blockTime   time.Duration
 	memPool     *TxPool
 	isValidator bool
 	rpcCh       chan RPC
@@ -33,19 +33,25 @@ func NewServer(opts ServerOpts) *Server {
 		opts.Blocktime = defaultBlockTime
 	}
 
+	if opts.RPCDecodeFunc == nil {
+		opts.RPCDecodeFunc = DefaultRPCDecodeFunc
+	}
+
 	s := &Server{
-		blockTime:   opts.Blocktime,
+		ServerOpts:  opts,
 		memPool:     newTxPool(),
 		isValidator: opts.PrivateKey != nil,
 		rpcCh:       make(chan RPC),
 		quitCh:      make(chan struct{}),
 	}
 
-	if opts.RPCHandler == nil {
-		opts.RPCHandler = NewDefaultRPCHandler(s)
+	// If server does not have RPCProcessor
+	// then, default processor is this server.
+	// Looks if we dont got any processor option,
+	// we going to use the server as default. 이래도 될라나
+	if s.RPCProcessor == nil {
+		s.RPCProcessor = s
 	}
-
-	s.ServerOpts = opts
 
 	return s
 }
@@ -53,7 +59,7 @@ func NewServer(opts ServerOpts) *Server {
 func (s *Server) Start() {
 	s.initTransports()
 
-	ticker := time.NewTicker(s.blockTime)
+	ticker := time.NewTicker(s.Blocktime)
 
 free:
 	for {
@@ -64,9 +70,16 @@ free:
 
 			// Somebody send wrong byte or malformed payload
 			// then just logging
-			if err := s.RPCHandler.HandlerRPC(rpc); err != nil {
+			msg, err := s.RPCDecodeFunc(rpc)
+
+			if err != nil {
 				logrus.Error(err)
 			}
+
+			if err := s.RPCProcessor.ProcessMessage(msg); err != nil {
+				logrus.Error(err)
+			}
+
 		case <-s.quitCh:
 			// break -> Break select statement NOT for loop
 			break free
@@ -80,7 +93,17 @@ free:
 	fmt.Println("Server shutdown")
 }
 
-func (s *Server) ProcessTransaction(from NetAddr, tx *core.Transaction) error {
+func (s *Server) ProcessMessage(msg *DecodeMessage) error {
+	switch t := msg.Data.(type) {
+	case *core.Transaction:
+		return s.processTransaction(t)
+	}
+
+	return nil
+}
+
+// For private
+func (s *Server) processTransaction(tx *core.Transaction) error {
 	hash := tx.Hash(core.TxHasher{})
 
 	if s.memPool.Has(hash) {
@@ -99,7 +122,7 @@ func (s *Server) ProcessTransaction(from NetAddr, tx *core.Transaction) error {
 
 	logrus.WithFields(logrus.Fields{
 		"hash":           hash,
-		"mempool length": s.memPool.len(),
+		"mempool-length": s.memPool.len(),
 	}).Info("adding new tx to mempool")
 
 	// TODO(@andantan): broadcast this tx to peers
