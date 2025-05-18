@@ -3,16 +3,19 @@ package network
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/andantan/go-node/core"
 	"github.com/andantan/go-node/crypto"
-	"github.com/sirupsen/logrus"
+	"github.com/go-kit/log"
 )
 
 var defaultBlockTime = 5 * time.Second
 
 type ServerOpts struct {
+	ID            string
+	Logger        log.Logger
 	RPCDecodeFunc RPCDecodeFunc
 	RPCProcessor  RPCProcessor
 	// This is will be container
@@ -38,6 +41,11 @@ func NewServer(opts ServerOpts) *Server {
 		opts.RPCDecodeFunc = DefaultRPCDecodeFunc
 	}
 
+	if opts.Logger == nil {
+		opts.Logger = log.NewLogfmtLogger(os.Stderr)
+		opts.Logger = log.With(opts.Logger, "ID", opts.ID)
+	}
+
 	s := &Server{
 		ServerOpts:  opts,
 		memPool:     newTxPool(),
@@ -54,13 +62,15 @@ func NewServer(opts ServerOpts) *Server {
 		s.RPCProcessor = s
 	}
 
+	if s.isValidator {
+		go s.validatorLoop()
+	}
+
 	return s
 }
 
 func (s *Server) Start() {
 	s.initTransports()
-
-	ticker := time.NewTicker(s.Blocktime)
 
 free:
 	for {
@@ -74,24 +84,34 @@ free:
 			msg, err := s.RPCDecodeFunc(rpc)
 
 			if err != nil {
-				logrus.Error(err)
+				s.Logger.Log("error", err)
 			}
 
 			if err := s.RPCProcessor.ProcessMessage(msg); err != nil {
-				logrus.Error(err)
+				s.Logger.Log("error", err)
 			}
 
 		case <-s.quitCh:
 			// break -> Break select statement NOT for loop
 			break free
-		case <-ticker.C:
-			if s.isValidator {
-				s.createNewBlock()
-			}
 		}
 	}
 
-	fmt.Println("Server shutdown")
+	s.Logger.Log("msg", "Server is shutting down")
+}
+
+func (s *Server) validatorLoop() {
+	ticker := time.NewTicker(s.Blocktime)
+
+	s.Logger.Log(
+		"msg", "Starting validator loop",
+		"BlockTime", s.Blocktime,
+	)
+
+	for {
+		<-ticker.C
+		s.createNewBlock()
+	}
 }
 
 func (s *Server) ProcessMessage(msg *DecodeMessage) error {
@@ -118,10 +138,6 @@ func (s *Server) processTransaction(tx *core.Transaction) error {
 	hash := tx.Hash(core.TxHasher{})
 
 	if s.memPool.Has(hash) {
-		logrus.WithFields(logrus.Fields{
-			"hash": hash,
-		}).Info("transaction already in mempool")
-
 		return nil
 	}
 
@@ -131,10 +147,11 @@ func (s *Server) processTransaction(tx *core.Transaction) error {
 
 	tx.SetFirstSeen(time.Now().UnixNano())
 
-	logrus.WithFields(logrus.Fields{
-		"hash":           hash,
-		"mempool-length": s.memPool.len(),
-	}).Info("adding new tx to mempool")
+	s.Logger.Log(
+		"msg", "adding new tx to mempool",
+		"hash", hash,
+		"mempool-length", s.memPool.len(),
+	)
 
 	// Broadcast tx before add mempool
 	go s.broadcastTx(tx)

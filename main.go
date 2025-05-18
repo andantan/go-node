@@ -45,7 +45,11 @@ func main() {
 		}
 	}()
 
+	privKey := crypto.GeneratePrivateKey()
+
 	opts := network.ServerOpts{
+		PrivateKey: &privKey,
+		ID:         "LOCAL",
 		Transports: []network.Transport{trLocal},
 	}
 
